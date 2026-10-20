@@ -1,0 +1,396 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Document Assistant</title>
+
+<style>
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    background: #0b1120;
+    color: #e2e8f0;
+    font-family: system-ui, sans-serif;
+}
+
+.container {
+    max-width: 900px;
+    margin: 35px auto;
+    padding: 20px;
+}
+
+header {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+h1 {
+    font-size: clamp(28px, 5vw, 42px);
+    margin-bottom: 8px;
+}
+
+.subtitle, .status {
+    color: #94a3b8;
+    font-size: 14px;
+}
+
+.panel {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 16px;
+    padding: 22px;
+    margin-bottom: 20px;
+}
+
+.upload-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+input[type="file"] {
+    flex: 1;
+    min-width: 180px;
+}
+
+button {
+    padding: 13px 20px;
+    border: none;
+    border-radius: 10px;
+    background: #38bdf8;
+    color: #082f49;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+button:hover { background: #7dd3fc; }
+
+button:disabled {
+    opacity: .5;
+    cursor: not-allowed;
+}
+
+.document-info {
+    margin-top: 15px;
+    color: #86efac;
+    overflow-wrap: anywhere;
+}
+
+.chat {
+    height: 420px;
+    overflow-y: auto;
+    padding: 20px;
+    background: #111827;
+    border: 1px solid #334155;
+    border-radius: 14px;
+}
+
+.message {
+    padding: 15px;
+    margin-bottom: 15px;
+    border-radius: 12px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.user {
+    background: #1d4ed8;
+    margin-left: 15%;
+}
+
+.assistant {
+    background: #1e293b;
+    margin-right: 15%;
+}
+
+.sources {
+    margin-top: 14px;
+    font-size: 13px;
+}
+
+.source {
+    margin-top: 10px;
+    padding: 12px;
+    background: #0f172a;
+    border-radius: 8px;
+}
+
+.source summary { cursor: pointer; }
+
+.question-form {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+#question {
+    flex: 1;
+    min-width: 0;
+    padding: 14px;
+    background: #1e293b;
+    color: white;
+    border: 1px solid #475569;
+    border-radius: 10px;
+    font-size: 15px;
+}
+
+.status { margin-top: 15px; }
+
+@media (max-width: 600px) {
+    .question-form {
+        flex-direction: column;
+    }
+
+    .user, .assistant {
+        margin: 0 0 15px;
+    }
+}
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<header>
+    <h1>AI Document Assistant</h1>
+    <p class="subtitle">
+        Ask questions about your PDFs using Retrieval-Augmented Generation
+    </p>
+</header>
+
+<section class="panel">
+    <h2>Upload Document</h2>
+    <p class="subtitle">
+        PDF files only · Maximum 10 MB · One active document
+    </p>
+
+    <form id="uploadForm" class="upload-row">
+        <input
+            type="file"
+            id="pdfFile"
+            accept=".pdf,application/pdf"
+            required
+        >
+        <button id="uploadButton" type="submit">
+            Upload PDF
+        </button>
+    </form>
+
+    <p class="document-info" id="documentInfo">
+        Checking active document...
+    </p>
+</section>
+
+<section class="chat" id="chat" aria-live="polite">
+    <div class="message assistant">
+        Welcome! Upload a PDF or ask a question about the active document.
+    </div>
+</section>
+
+<form id="questionForm" class="question-form">
+    <input
+        id="question"
+        placeholder="Ask a question about your document..."
+        maxlength="1000"
+        required
+    >
+    <button id="askButton" type="submit">
+        Ask AI
+    </button>
+</form>
+
+<p class="status" id="status" role="status">
+    Powered by Sentence Transformers, FAISS and Ollama
+</p>
+
+</div>
+
+<script>
+const uploadForm = document.getElementById("uploadForm");
+const questionForm = document.getElementById("questionForm");
+const fileInput = document.getElementById("pdfFile");
+const questionInput = document.getElementById("question");
+const chat = document.getElementById("chat");
+const uploadButton = document.getElementById("uploadButton");
+const askButton = document.getElementById("askButton");
+const documentInfo = document.getElementById("documentInfo");
+const statusText = document.getElementById("status");
+
+let busy = false;
+let ready = false;
+
+function updateButtons() {
+    uploadButton.disabled = busy;
+    askButton.disabled = busy || !ready;
+}
+
+function setBusy(value) {
+    busy = value;
+    updateButtons();
+}
+
+function addMessage(text, type) {
+    const div = document.createElement("div");
+    div.className = `message ${type}`;
+    div.textContent = text;
+
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+
+    return div;
+}
+
+async function loadDocument() {
+    try {
+        const response = await fetch("/document");
+        if (!response.ok) throw new Error("Status unavailable");
+
+        const data = await response.json();
+        ready = data.ready;
+
+        documentInfo.textContent = ready
+            ? `${data.filename} — ${data.chunks} chunks indexed`
+            : "No document indexed yet.";
+
+    } catch (error) {
+        ready = false;
+        documentInfo.textContent = "Cannot load document status.";
+    }
+
+    updateButtons();
+}
+
+uploadForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    const file = fileInput.files[0];
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+        statusText.textContent = "File must be smaller than 10 MB.";
+        return;
+    }
+
+    setBusy(true);
+    statusText.textContent = "Processing PDF and creating embeddings...";
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+        const response = await fetch("/upload", {
+            method: "POST",
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(
+                typeof data.detail === "string"
+                    ? data.detail
+                    : "PDF upload failed."
+            );
+        }
+
+        ready = true;
+
+        documentInfo.textContent =
+            `${data.filename} — ${data.chunks} chunks indexed`;
+
+        // Clear previous document's conversation
+        chat.replaceChildren();
+
+        addMessage(
+            `Document "${data.filename}" is ready. Ask me a question!`,
+            "assistant"
+        );
+
+        statusText.textContent = "Document indexed successfully.";
+        fileInput.value = "";
+
+    } catch (error) {
+        statusText.textContent = error.message;
+    } finally {
+        setBusy(false);
+    }
+});
+
+questionForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    const question = questionInput.value.trim();
+    if (!question || !ready) return;
+
+    setBusy(true);
+    questionInput.value = "";
+
+    addMessage(question, "user");
+
+    const answerBox = addMessage("Generating answer...", "assistant");
+    statusText.textContent = "Searching and generating answer...";
+
+    try {
+        const response = await fetch("/ask", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ question })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.detail || "Request failed.");
+        }
+
+        answerBox.textContent = data.answer || "No answer generated.";
+
+        if (data.sources && data.sources.length) {
+            const sources = document.createElement("div");
+            sources.className = "sources";
+
+            const heading = document.createElement("strong");
+            heading.textContent = "Retrieved Sources";
+            sources.appendChild(heading);
+
+            data.sources.forEach((source, i) => {
+                const details = document.createElement("details");
+                details.className = "source";
+
+                const summary = document.createElement("summary");
+                summary.textContent =
+                    `Source ${i + 1} — Page ${source.page}`;
+
+                const content = document.createElement("p");
+                content.textContent = source.text;
+
+                details.append(summary, content);
+                sources.appendChild(details);
+            });
+
+            answerBox.appendChild(sources);
+        }
+
+        statusText.textContent = "Answer generated.";
+
+    } catch (error) {
+        answerBox.textContent = `Error: ${error.message}`;
+        statusText.textContent = "Request failed.";
+    } finally {
+        setBusy(false);
+        questionInput.focus();
+        chat.scrollTop = chat.scrollHeight;
+    }
+});
+
+loadDocument();
+</script>
+
+</body>
+</html>
