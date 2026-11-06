@@ -52,7 +52,6 @@ def test_large_upload():
 
 
 def test_upload_success(monkeypatch):
-
     def fake_build_index(content, filename):
         return {
             "filename": filename,
@@ -82,7 +81,6 @@ def test_upload_success(monkeypatch):
 
 
 def test_ask(monkeypatch):
-
     monkeypatch.setattr(
         app_module,
         "get_document_info",
@@ -123,3 +121,46 @@ def test_empty_question():
     )
 
     assert response.status_code == 422
+
+
+def test_ask_without_document(monkeypatch):
+    monkeypatch.setattr(
+        app_module,
+        "get_document_info",
+        lambda: {"ready": False}
+    )
+
+    response = client.post(
+        "/ask",
+        json={"question": "What is attention?"}
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == (
+        "Upload a PDF before asking questions."
+    )
+
+
+def test_ask_ollama_connection_error(monkeypatch):
+    monkeypatch.setattr(
+        app_module,
+        "get_document_info",
+        lambda: {"ready": True}
+    )
+
+    def fake_generate_answer(question):
+        raise ConnectionError("Ollama is unavailable")
+
+    monkeypatch.setattr(
+        app_module,
+        "generate_answer",
+        fake_generate_answer
+    )
+
+    response = client.post(
+        "/ask",
+        json={"question": "What is attention?"}
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Cannot connect to Ollama."
