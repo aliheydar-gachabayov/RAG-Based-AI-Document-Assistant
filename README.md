@@ -87,7 +87,8 @@ RAG-Based-AI-Document-Assistant/
 │   └── tests/
 │       └── test_api.py
 ├── tests/
-│   └── test_chunk.py
+│   ├── test_chunk.py
+│   └── test_search.py
 ├── data/
 │   └── sample.pdf
 ├── app.py
@@ -100,6 +101,7 @@ RAG-Based-AI-Document-Assistant/
 ├── evaluation_dataset.json
 ├── pytest.ini
 ├── requirements.txt
+├── requirements-dev.txt
 ├── Dockerfile
 └── .gitignore
 ```
@@ -189,10 +191,11 @@ Interactive API documentation is available at [http://127.0.0.1:8000/docs](http:
 ### 6. Run tests
 
 ```bash
+python -m pip install -r requirements-dev.txt
 python -m pytest -v
 ```
 
-The test suite covers API endpoints, upload validation, question handling, and document chunking behavior.
+The test suite covers API endpoints, upload validation, question handling, document chunking, and MMR retrieval behavior.
 
 ## API examples
 
