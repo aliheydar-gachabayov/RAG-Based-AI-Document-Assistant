@@ -89,8 +89,7 @@ RAG-Based-AI-Document-Assistant/
 ├── tests/
 │   ├── test_chunk.py
 │   └── test_search.py
-├── data/
-│   └── sample.pdf
+├── data/                    # Optional local folder (ignored by Git)
 ├── app.py
 ├── chunk.py
 ├── extract.py
