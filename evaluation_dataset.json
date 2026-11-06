@@ -19,5 +19,57 @@
   {
     "question": "Why does the Transformer use attention?",
     "relevant_pages": [2, 3]
+  },
+  {
+    "question": "What is self-attention?",
+    "relevant_pages": [3, 5]
+  },
+  {
+    "question": "What are the three ways multi-head attention is used in the Transformer?",
+    "relevant_pages": [5]
+  },
+  {
+    "question": "Why does the Transformer decoder use masking?",
+    "relevant_pages": [3]
+  },
+  {
+    "question": "What role do feed-forward networks play in the Transformer?",
+    "relevant_pages": [3]
+  },
+  {
+    "question": "How are residual connections and layer normalization used in the Transformer?",
+    "relevant_pages": [3]
+  },
+  {
+    "question": "How does self-attention compare with recurrent layers in computational complexity?",
+    "relevant_pages": [6, 7]
+  },
+  {
+    "question": "Why does the Transformer need positional encodings?",
+    "relevant_pages": [6]
+  },
+  {
+    "question": "Which mathematical functions are used to create positional encodings?",
+    "relevant_pages": [6]
+  },
+  {
+    "question": "What dropout rate is used in the Transformer base model?",
+    "relevant_pages": [8]
+  },
+  {
+    "question": "What is label smoothing and why is it used?",
+    "relevant_pages": [8]
+  },
+  {
+    "question": "What BLEU scores does the Transformer achieve on English-to-German and English-to-French translation?",
+    "relevant_pages": [8]
+  },
+  {
+    "question": "How does changing the number of attention heads affect Transformer performance?",
+    "relevant_pages": [9]
+  },
+  {
+    "question": "How well does the Transformer perform on constituency parsing?",
+    "relevant_pages": [10]
   }
 ]

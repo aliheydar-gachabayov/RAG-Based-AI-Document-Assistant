@@ -2,7 +2,7 @@
 
 A local PDF question-answering application built with retrieval-augmented generation (RAG). Upload a PDF, retrieve relevant passages with semantic search, and generate an answer with page references using a locally hosted language model.
 
-The project is intended as an educational AI engineering project demonstrating document ingestion, embeddings, vector search, API development, and evaluation.
+The project is intended as an educational AI engineering project demonstrating document ingestion, embeddings, vector search, retrieval evaluation, API development, and local LLM integration.
 
 ## Features
 
@@ -11,37 +11,41 @@ The project is intended as an educational AI engineering project demonstrating d
 - Split extracted text into overlapping chunks.
 - Generate embeddings with Sentence Transformers.
 - Retrieve relevant passages using FAISS inner-product similarity.
+- Support diversity-aware retrieval using Maximal Marginal Relevance (MMR).
+- Compare standard and MMR retrieval using Hit Rate@K and Mean Reciprocal Rank (MRR).
 - Generate answers with a local Ollama model (default: `qwen3:1.7b`).
 - Return retrieved passages and page numbers alongside each answer.
 - Expose document upload, status, and question-answering endpoints through FastAPI.
 - Validate file type, PDF signature, upload size, and question length.
-- Include API tests for core endpoints and validation behavior.
+- Include API and chunking tests.
 
 ## Architecture
 
 ```text
-                 Browser
-                    |
-                    v
-             FastAPI application
-               /     |      \
-              /      |       \
-          /upload   /ask   /document
-             |       |
-             v       v
-        PyMuPDF   Embed question
-             |       |
-        Extract text  v
-             |      FAISS
-        Chunk pages   |
-             |        v
-        Embed chunks  Relevant passages
-             |        |
-             v        v
-            FAISS   Ollama (Qwen3)
+                    Browser
                        |
                        v
-                 Answer + sources
+                FastAPI application
+                  /     |      \
+                 /      |       \
+             /upload   /ask   /document
+                |       |
+                v       v
+             PyMuPDF  Embed question
+                |       |
+           Extract text |
+                |       v
+           Chunk pages FAISS
+                |       |
+           Embed chunks |
+                |       v
+                v   Relevant passages
+              FAISS      |
+                         v
+                   Ollama (Qwen3)
+                         |
+                         v
+                  Answer + sources
 ```
 
 ### Retrieval and generation flow
@@ -51,9 +55,10 @@ The project is intended as an educational AI engineering project demonstrating d
 3. Text is split into overlapping character-based chunks while retaining page numbers.
 4. Sentence Transformers creates normalized embeddings for each chunk.
 5. FAISS stores the embeddings in an inner-product index.
-6. When a question arrives, the system embeds it and retrieves the top three passages.
-7. The retrieved passages are supplied to Ollama with instructions to answer only from the provided context.
-8. The API returns the generated answer and retrieved source passages, including page numbers.
+6. When a question arrives, the system embeds it and retrieves relevant passages.
+7. Standard retrieval ranks passages by similarity. MMR retrieval balances relevance and diversity.
+8. The retrieved passages are supplied to Ollama with instructions to answer only from the provided context.
+9. The API returns the generated answer and retrieved source passages, including page numbers.
 
 The default embedding model is `all-MiniLM-L6-v2`. The default generation model is `qwen3:1.7b`.
 
@@ -66,6 +71,7 @@ The default embedding model is `all-MiniLM-L6-v2`. The default generation model 
 | PDF processing | PyMuPDF |
 | Embeddings | Sentence Transformers |
 | Vector search | FAISS |
+| Retrieval optimization | Maximal Marginal Relevance (MMR) |
 | Generation | Ollama, Qwen3 |
 | Numerical computing | NumPy |
 | Frontend | HTML, CSS, JavaScript |
@@ -80,6 +86,10 @@ RAG-Based-AI-Document-Assistant/
 │   ├── index.html
 │   └── tests/
 │       └── test_api.py
+├── tests/
+│   └── test_chunk.py
+├── data/
+│   └── sample.pdf
 ├── app.py
 ├── chunk.py
 ├── extract.py
@@ -88,6 +98,7 @@ RAG-Based-AI-Document-Assistant/
 ├── evaluate.py
 ├── evaluate_retrieval.py
 ├── evaluation_dataset.json
+├── pytest.ini
 ├── requirements.txt
 ├── Dockerfile
 └── .gitignore
@@ -139,7 +150,7 @@ Make sure the Ollama application or service is running, then execute:
 ollama pull qwen3:1.7b
 ```
 
-The application defaults to the Ollama server at `http://localhost:11434`. You can override the model and server address with environment variables:
+The application defaults to the Ollama server at `http://localhost:11434`. You can override the model and server address with environment variables.
 
 macOS / Linux:
 
@@ -178,10 +189,10 @@ Interactive API documentation is available at [http://127.0.0.1:8000/docs](http:
 ### 6. Run tests
 
 ```bash
-python -m pytest frontend/tests -v
+python -m pytest -v
 ```
 
-The API tests cover the health endpoint, frontend response, invalid and oversized uploads, successful upload behavior with a mocked indexer, question handling, and empty-question validation.
+The test suite covers API endpoints, upload validation, question handling, and document chunking behavior.
 
 ## API examples
 
@@ -203,6 +214,7 @@ curl -X POST http://127.0.0.1:8000/ask \
 ```
 
 The response contains:
+
 - The original question.
 - The generated answer.
 - Retrieved source passages, with page numbers and similarity scores.
@@ -215,6 +227,7 @@ The response contains:
 - Password-protected PDFs are rejected.
 - One active document index is held in application memory. Uploading a new PDF replaces the active index.
 - The default retrieval setting is top-`k` = 3.
+- Standard FAISS retrieval and MMR retrieval are implemented.
 - Chunking currently uses character-based chunks (800 characters, with 150 characters of overlap).
 - The default generation model is configurable through `OLLAMA_MODEL`.
 - The application is designed for local experimentation, not multi-user production deployment.
@@ -223,12 +236,49 @@ The response contains:
 
 Two evaluation scripts are included:
 
-- `evaluate_retrieval.py` evaluates retrieval against manually labeled relevant page numbers in `evaluation_dataset.json` and reports Hit Rate@3 and MRR@3.
+- `evaluate_retrieval.py` compares standard FAISS retrieval with Maximal Marginal Relevance (MMR) retrieval.
 - `evaluate.py` runs a small keyword-match retrieval check for example questions.
 
-To run either script, first start the application or initialize the document index in the same Python process with a suitable PDF. The FAISS index is in memory and is not automatically shared between separate processes.
+### Retrieval evaluation methodology
 
-The current evaluation data is a starting point, not a comprehensive benchmark. Results should be interpreted as development checks rather than evidence of production-level retrieval or answer quality.
+Retrieval is evaluated using `evaluation_dataset.json`, which contains 18 questions about the sample document and manually assigned relevant PDF page numbers.
+
+The evaluation reports two metrics:
+
+- **Hit Rate@K:** The proportion of questions for which at least one relevant page appears in the top K retrieved results.
+- **Mean Reciprocal Rank (MRR@K):** Measures how highly the first relevant result is ranked. Higher values indicate better ranking.
+
+Both retrieval methods are evaluated at K = 3 and K = 10.
+
+### Results
+
+| Metric | Standard Retrieval | MMR Retrieval |
+|---|---:|---:|
+| Hit Rate@3 | 0.889 | 0.889 |
+| MRR@3 | 0.741 | 0.741 |
+| Hit Rate@10 | 1.000 | 1.000 |
+| MRR@10 | 0.757 | 0.769 |
+
+### Observations
+
+- Both methods retrieve at least one relevant page for all 18 questions within the top 10 results.
+- MMR achieves a slightly higher MRR@10 than standard retrieval (0.769 compared with 0.757).
+- At K = 3, both methods achieve identical overall metrics, although they rank some individual questions differently.
+- MMR improves the ranking of some queries but can reduce the ranking of others.
+
+These results suggest that MMR can improve retrieval ranking for certain queries, but does not consistently outperform standard retrieval.
+
+### Limitations
+
+The evaluation uses manually labeled page-level relevance rather than exact chunk-level relevance. It covers one sample PDF and 18 questions, so it should be considered an initial development experiment rather than a comprehensive benchmark.
+
+### Running the retrieval evaluation
+
+```bash
+python evaluate_retrieval.py
+```
+
+The script automatically indexes the default sample PDF when `search.py` is imported. Results are therefore based on that document.
 
 ## Docker
 

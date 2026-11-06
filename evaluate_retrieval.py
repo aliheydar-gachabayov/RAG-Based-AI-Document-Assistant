@@ -26,6 +26,10 @@ def evaluate(search_function, method_name):
 
             results = search_function(question, top_k=k)
 
+            print(f"\nQuestion: {question}")
+            print(f"Relevant pages: {sorted(relevant_pages)}")
+            print(f"Retrieved pages: {[r['page'] for r in results]}")
+
             first_relevant_rank = None
 
             for rank, result in enumerate(results, start=1):
@@ -44,7 +48,6 @@ def evaluate(search_function, method_name):
             hits.append(hit)
             reciprocal_ranks.append(reciprocal_rank)
 
-            print(f"\nQuestion: {question}")
             print(f"First relevant rank: {first_relevant_rank}")
             print(f"Hit@{k}: {hit}")
             print(f"Reciprocal rank: {reciprocal_rank:.3f}")
