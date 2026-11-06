@@ -281,7 +281,7 @@ The evaluation uses manually labeled page-level relevance rather than exact chun
 python evaluate_retrieval.py
 ```
 
-The script automatically indexes the default sample PDF when `search.py` is imported. Results are therefore based on that document.
+The script automatically indexes `data/sample.pdf` when `search.py` is imported, if that file exists. The `data/` directory is excluded from Git, so the sample PDF is not included in this repository. To run this evaluation, create the `data/` directory and place your own text-based PDF there as `sample.pdf`. The questions and relevant page numbers in `evaluation_dataset.json` must match that PDF.
 
 ## Docker
 
