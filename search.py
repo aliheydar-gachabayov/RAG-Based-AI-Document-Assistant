@@ -17,6 +17,7 @@ model = SentenceTransformer("all-MiniLM-L6-v2")
 active_chunks = []
 active_index = None
 active_filename = None
+active_embeddings = None
 
 index_lock = RLock()
 
@@ -24,7 +25,7 @@ index_lock = RLock()
 def build_index(pdf_bytes, filename):
     """Process a PDF and replace the active search index."""
 
-    global active_chunks, active_index, active_filename
+    global active_chunks, active_index, active_filename, active_embeddings
 
     pages = []
 
@@ -71,12 +72,13 @@ def build_index(pdf_bytes, filename):
 
     index = faiss.IndexFlatIP(embeddings.shape[1])
     index.add(embeddings)
+    chunk_embeddings = embeddings.copy()
 
     with index_lock:
         active_chunks = chunks
         active_index = index
         active_filename = filename
-
+        active_embeddings = chunk_embeddings
     return {
         "filename": filename,
         "pages": len(pages),
@@ -130,6 +132,91 @@ def get_document_info():
             "ready": active_index is not None
         }
 
+
+def search_documents_mmr(question, top_k=3, fetch_k=15, lambda_param=0.7):
+    """Retrieve relevant and diverse passages using MMR."""
+
+    if top_k < 1:
+        raise ValueError("top_k must be positive.")
+
+    if fetch_k < top_k:
+        raise ValueError("fetch_k must be >= top_k.")
+
+    if not 0 <= lambda_param <= 1:
+        raise ValueError("lambda_param must be between 0 and 1.")
+
+    question_embedding = model.encode(
+        [question],
+        convert_to_numpy=True,
+        normalize_embeddings=True
+    )
+
+    question_embedding = np.asarray(
+        question_embedding,
+        dtype="float32"
+    )[0]
+
+    with index_lock:
+        if active_index is None:
+            raise ValueError("No document has been indexed.")
+
+        candidate_count = min(fetch_k, len(active_chunks))
+
+        scores, indices = active_index.search(
+            question_embedding.reshape(1, -1),
+            candidate_count
+        )
+
+        candidate_indices = [
+            int(idx) for idx in indices[0] if idx >= 0
+        ]
+
+        selected = []
+        remaining = candidate_indices.copy()
+
+        while remaining and len(selected) < top_k:
+            best_idx = None
+            best_score = float("-inf")
+
+            for idx in remaining:
+                relevance = float(
+                    np.dot(active_embeddings[idx], question_embedding)
+                )
+
+                if selected:
+                    diversity_penalty = max(
+                        float(np.dot(
+                            active_embeddings[idx],
+                            active_embeddings[selected_idx]
+                        ))
+                        for selected_idx in selected
+                    )
+                else:
+                    diversity_penalty = 0.0
+
+                mmr_score = (
+                    lambda_param * relevance
+                    - (1 - lambda_param) * diversity_penalty
+                )
+
+                if mmr_score > best_score:
+                    best_score = mmr_score
+                    best_idx = idx
+
+            selected.append(best_idx)
+            remaining.remove(best_idx)
+
+        return [
+            {
+                "page": active_chunks[idx]["page"],
+                "score": float(np.dot(
+                    active_embeddings[idx],
+                    question_embedding
+                )),
+                "text": active_chunks[idx]["text"]
+            }
+            for idx in selected
+        ]
 
 if PDF_PATH.exists():
     print("Indexing default PDF...")

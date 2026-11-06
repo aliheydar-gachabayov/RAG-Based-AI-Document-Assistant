@@ -2,57 +2,60 @@
 import json
 from pathlib import Path
 
-from search import search_documents
+from search import search_documents, search_documents_mmr
 
 BASE_DIR = Path(__file__).resolve().parent
 DATASET_PATH = BASE_DIR / "evaluation_dataset.json"
 
 
-def evaluate():
+def evaluate(search_function, method_name):
     with open(DATASET_PATH, encoding="utf-8") as file:
         test_cases = json.load(file)
 
-    hits = []
-    reciprocal_ranks = []
+    for k in [3, 10]:
+        hits = []
+        reciprocal_ranks = []
 
-    for case in test_cases:
-        question = case["question"]
-        relevant_pages = set(case["relevant_pages"])
+        print(f"\n{'=' * 60}")
+        print(f"{method_name}: TOP {k}")
+        print(f"{'=' * 60}")
 
-        if not relevant_pages:
-            raise ValueError(
-                f"Missing ground truth for: {question}"
+        for case in test_cases:
+            question = case["question"]
+            relevant_pages = set(case["relevant_pages"])
+
+            results = search_function(question, top_k=k)
+
+            first_relevant_rank = None
+
+            for rank, result in enumerate(results, start=1):
+                if result["page"] in relevant_pages:
+                    first_relevant_rank = rank
+                    break
+
+            hit = 1 if first_relevant_rank else 0
+
+            reciprocal_rank = (
+                1 / first_relevant_rank
+                if first_relevant_rank
+                else 0
             )
 
-        results = search_documents(question, top_k=3)
+            hits.append(hit)
+            reciprocal_ranks.append(reciprocal_rank)
 
-        first_relevant_rank = None
+            print(f"\nQuestion: {question}")
+            print(f"First relevant rank: {first_relevant_rank}")
+            print(f"Hit@{k}: {hit}")
+            print(f"Reciprocal rank: {reciprocal_rank:.3f}")
 
-        for rank, result in enumerate(results, start=1):
-            if result["page"] in relevant_pages:
-                first_relevant_rank = rank
-                break
-
-        hit = 1 if first_relevant_rank else 0
-        rr = 1 / first_relevant_rank if first_relevant_rank else 0
-
-        hits.append(hit)
-        reciprocal_ranks.append(rr)
-
-        print(f"\nQuestion: {question}")
-        print(f"Relevant pages: {sorted(relevant_pages)}")
-        print(f"Retrieved pages: {[r['page'] for r in results]}")
-        print(f"Hit@3: {hit}")
-        print(f"Reciprocal rank: {rr:.3f}")
-
-    print("\n=== FINAL EVALUATION ===")
-    print(f"Questions: {len(test_cases)}")
-    print(f"Hit Rate@3: {sum(hits) / len(hits):.2%}")
-    print(
-        f"MRR@3: "
-        f"{sum(reciprocal_ranks) / len(reciprocal_ranks):.3f}"
-    )
+        print(f"\nHit Rate@{k}: {sum(hits) / len(hits):.3f}")
+        print(
+            f"MRR@{k}: "
+            f"{sum(reciprocal_ranks) / len(reciprocal_ranks):.3f}"
+        )
 
 
 if __name__ == "__main__":
-    evaluate()
+    evaluate(search_documents, "STANDARD RETRIEVAL")
+    evaluate(search_documents_mmr, "MMR RETRIEVAL")

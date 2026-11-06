@@ -2,22 +2,22 @@
 [
   {
     "question": "What is multi-head attention?",
-    "relevant_pages": []
+    "relevant_pages": [4, 5]
   },
   {
     "question": "What is positional encoding?",
-    "relevant_pages": []
+    "relevant_pages": [6]
   },
   {
     "question": "What is scaled dot-product attention?",
-    "relevant_pages": []
+    "relevant_pages": [4]
   },
   {
     "question": "What are the encoder and decoder?",
-    "relevant_pages": []
+    "relevant_pages": [3]
   },
   {
     "question": "Why does the Transformer use attention?",
-    "relevant_pages": []
+    "relevant_pages": [2, 3]
   }
 ]
