@@ -6,6 +6,7 @@ from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from ollama import ResponseError
+import pymupdf
 
 from rag import generate_answer
 from search import build_index, get_document_info
@@ -78,7 +79,7 @@ def upload_document(file: UploadFile = File(...)):
                 **result
             }
 
-        except (ValueError, RuntimeError) as error:
+        except (ValueError, RuntimeError, pymupdf.FileDataError) as error:
             raise HTTPException(
                 status_code=400,
                 detail=str(error)
