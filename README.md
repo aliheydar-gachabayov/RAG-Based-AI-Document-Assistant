@@ -143,6 +143,10 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
+On the first application or test run, Sentence Transformers downloads the
+`all-MiniLM-L6-v2` embedding model. This requires an internet connection;
+the model is cached locally for later runs.
+
 ### 4. Start Ollama and download the model
 
 Make sure the Ollama application or service is running, then execute:
