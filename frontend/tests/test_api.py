@@ -80,6 +80,26 @@ def test_upload_success(monkeypatch):
     assert response.json()["chunks"] == 5
 
 
+def test_malformed_pdf_returns_client_error(monkeypatch):
+    def reject_pdf(content, filename):
+        raise app_module.pymupdf.FileDataError("Failed to open PDF.")
+
+    monkeypatch.setattr(app_module, "build_index", reject_pdf)
+
+    response = client.post(
+        "/upload",
+        files={
+            "file": (
+                "broken.pdf",
+                b"%PDF-invalid-content",
+                "application/pdf"
+            )
+        }
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Failed to open PDF."
+
 def test_ask(monkeypatch):
     monkeypatch.setattr(
         app_module,
